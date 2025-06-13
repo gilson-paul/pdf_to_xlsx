@@ -1,0 +1,5 @@
+pymupdf
+openai
+pydantic
+xlsxwriter
+llama_cloud_services
