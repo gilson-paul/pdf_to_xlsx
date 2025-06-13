@@ -222,10 +222,18 @@ def process_pdf_to_excel_with_images(
                         {
                             "type": "text",
                             "text": (
-                                "Analyze the image. Is it a photo of a product on a "
-                                "plain white, black, or simple studio background, suitable for a product catalog? "
-                                "Or is it a banner, a collage of multiple items, a lifestyle shot, or text-heavy? "
-                                "Answer with only the word 'True' for the product shot, and 'False' for anything else."
+                                """
+                                Objective: Analyze an image to filter out banners and collages from a product collection. Respond with only the word 'True' or 'False'.
+
+                                Answer 'False' if the image is:
+
+                                  A Banner or Advertisement: An image with significant marketing text, graphic overlays, or promotional logos that are not part of the product itself.
+                                  A Collage: An image that artificially combines multiple, separate products that are not sold together as a single set.
+
+                                Answer 'True' if the image is:
+
+                                  A photo of a product. This includes clean single-product shots, products shown in their packaging, and lifestyle images of the product being worn or used, as long as it is not a banner or a collage.
+                                """
                             ),
                         },
                         {
