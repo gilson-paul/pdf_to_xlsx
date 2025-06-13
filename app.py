@@ -1,89 +1,104 @@
-# prompt: streamlit code for taking in the inputs uploaded pdf file and giving output.xlsx for download
-
 import streamlit as st
 import pandas as pd
 import os
-import tempfile
+import io
 import base64
-from io import BytesIO
 from util import process_pdf_to_excel_with_images
-# Assuming the functions process_pdf_to_excel_with_images and is_single_product_image
-# are defined in your code.
-# You might need to adapt the code structure to work within a Streamlit app.
 
-# Define a download button function
-def download_button(object_to_download, download_filename, button_text):
-    """
-    Generates a link to download the given object_to_download.
-    In this example, object_to_download is a bytes object (the Excel file).
-    """
-    if isinstance(object_to_download, bytes):
-        b64 = base64.b64encode(object_to_download).decode()
-    else:
-        raise TypeError("Object to download must be bytes")
 
-    mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    href = f'<a href="data:{mime_type};base64,{b64}" download="{download_filename}">{button_text}</a>'
-    return href
+# Ensure necessary directories exist
+if not os.path.exists('temp_uploads'):
+    os.makedirs('temp_uploads')
+if not os.path.exists('extracted_images_streamlit'):
+    os.makedirs('extracted_images_streamlit')
+if not os.path.exists('output_excel_streamlit'):
+    os.makedirs('output_excel_streamlit')
+
+# --- Streamlit App ---
 
 st.title("PDF Product Catalog Extractor")
 
-st.write("Upload a PDF product catalog and extract product data with images into an Excel file.")
+st.write(
+    "Upload a PDF product catalog, and this app will extract product "
+    "information and images, generating an Excel file for download."
+)
 
+# File uploader
 uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
 
-# Define API keys (replace with your actual keys or secure method)
-# In a real application, use Streamlit Secrets or environment variables
-# st.secrets["llama_parse"] and st.secrets["OPENAI_API_KEY"]
-# For this example running in a notebook, we use placeholders.
-# You MUST replace these with your actual keys or a secrets management method.
-llama_api_key = os.getenv("LLAMA_PARSE_API_KEY") # Replace with your key or secrets mechanism
-openai_api_key = os.getenv("OPENAI_API_KEY") # Replace with your key or secrets mechanism
+# Process button
+process_button = st.button("Process PDF")
 
-if not llama_api_key or not openai_api_key:
-    st.error("API keys not found. Please set your LLAMA_PARSE_API_KEY and OPENAI_API_KEY.")
-    st.stop()
+# Use secrets for API keys
+# In a real Streamlit app, you would manage secrets securely.
+# For demonstration in Colab, you might need to get them differently,
+# but for a deployed Streamlit app, use st.secrets.toml
+try:
+    llama_api_key = st.secrets["LLAMA_API_KEY"]
+except KeyError:
+    llama_api_key = None
+    st.warning("LLAMA_API_KEY not found in secrets. Processing may fail.")
+
+try:
+    openai_api_key = st.secrets["OPENAI_API_KEY"]
+except KeyError:
+    openai_api_key = None
+    st.warning("OPENAI_API_KEY not found in secrets. Processing may fail.")
 
 
-if uploaded_file is not None:
-    # Create a temporary directory and save the uploaded PDF
-    with tempfile.TemporaryDirectory() as tmpdir:
-        pdf_path = os.path.join(tmpdir, uploaded_file.name)
-        with open(pdf_path, "wb") as f:
+if uploaded_file is not None and process_button:
+    if llama_api_key is None or openai_api_key is None:
+        st.error("API keys are missing. Please configure your secrets.")
+    else:
+        # Save the uploaded file temporarily
+        temp_pdf_path = os.path.join("temp_uploads", uploaded_file.name)
+        with open(temp_pdf_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
-        st.success(f"Uploaded {uploaded_file.name}")
+        st.info(f"Uploaded file: {uploaded_file.name}")
+        st.info("Processing your PDF. This may take some time...")
 
-        output_folder = os.path.join(tmpdir, "extracted_images")
-        output_excel_file = "extracted_products.xlsx"
-        output_excel_path = os.path.join(tmpdir, output_excel_file)
+        # Define output paths
+        image_output_dir = "extracted_images_streamlit"
+        final_excel_file = os.path.join("output_excel_streamlit", f"{os.path.splitext(uploaded_file.name)[0]}_extracted.xlsx")
 
-        # Run the extraction process with a loading spinner
-        with st.spinner("Extracting data and images from PDF..."):
+        # Call the processing function
+        # Make sure process_pdf_to_excel_with_images is defined or imported
+        try:
+            # Assuming process_pdf_to_excel_with_images is defined as in the user's previous code
             process_pdf_to_excel_with_images(
-                pdf_path=pdf_path,
-                output_folder=output_folder,
-                output_excel_file=output_excel_path,
+                pdf_path=temp_pdf_path,
+                output_folder=image_output_dir,
+                output_excel_file=final_excel_file,
                 llama_api_key=llama_api_key,
                 openai_api_key=openai_api_key,
             )
+            st.success("Processing complete!")
 
-        # Check if the Excel file was created
-        if os.path.exists(output_excel_path):
-            st.success("Extraction complete!")
+            # Provide download link for the Excel file
+            if os.path.exists(final_excel_file):
+                with open(final_excel_file, "rb") as f:
+                    excel_bytes = f.read()
+                st.download_button(
+                    label="Download Excel File",
+                    data=excel_bytes,
+                    file_name=os.path.basename(final_excel_file),
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            else:
+                st.error("Output Excel file was not created.")
 
-            # Read the generated Excel file into bytes for download
-            with open(output_excel_path, "rb") as f:
-                excel_bytes = f.read()
+        except Exception as e:
+            st.error(f"An error occurred during processing: {e}")
+            st.write("Please check the logs for more details.")
 
-            # Provide the download link
-            st.markdown(
-                download_button(
-                    excel_bytes, output_excel_file, "Download Excel File"
-                ),
-                unsafe_allow_html=True,
-            )
+        finally:
+            # Clean up temporary files and folders (optional but good practice)
+            # Be careful with shutil.rmtree - ensure you are in the correct directory
+            if os.path.exists("temp_uploads"):
+                shutil.rmtree("temp_uploads")
+            if os.path.exists("extracted_images_streamlit"):
+                shutil.rmtree("extracted_images_streamlit")
 
-        else:
-            st.error("Failed to create the Excel file. Check logs for details.")
-
+elif uploaded_file is None and process_button:
+    st.warning("Please upload a PDF file before clicking Process.")
