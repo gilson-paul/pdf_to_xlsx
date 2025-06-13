@@ -17,8 +17,8 @@ def process_pdf_to_excel_with_images(
     pdf_path: str,
     output_folder: str,
     output_excel_file: str,
-    llama_api_key: str=llama_api_key,
-    openai_api_key: str=api_key,
+    llama_api_key: str,
+    openai_api_key: str,
 ):
     """
     Parses a PDF to extract product information and images, then combines them
@@ -186,7 +186,7 @@ def process_pdf_to_excel_with_images(
         )
 
     # --- 3. Extract Images from PDF ---
-    def is_single_product_image(image_str: str, api_key: str=api_key) -> bool:
+    def is_single_product_image(image_str: str, api_key: str=openai_api_key) -> bool:
         """
         Analyzes an image using OpenAI's vision model to determine if it's a single
         product image suitable for a catalog.
@@ -206,7 +206,7 @@ def process_pdf_to_excel_with_images(
             
         try:
             # Initialize the OpenAI client
-            client = OpenAI(api_key=api_key)
+            client = OpenAI(api_key=openai_api_key)
 
             # Encode the image in base64
             base64_image = image_str
