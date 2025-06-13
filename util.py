@@ -86,30 +86,32 @@ def process_pdf_to_excel_with_images(
         product_data: List[Product]
 
     # --- 2. Extract Product Data from Markdown using OpenAI ---
-    user_prompt = f"""You are an expert data extraction assistant specializing in parsing structured text from markdown.
+    user_prompt = f""""You are an expert data extraction assistant specializing in parsing structured text from markdown.
 
     Your task is to analyze the following markdown string, which contains product information organized into multiple tables.
-
+    
     **Instructions:**
     1.  **Identify Data Tables:** Scan the markdown to find all the product tables.
     2.  **Understand the Structure:** In each table, **each column represents a single product**. The data for each product is arranged vertically down the column.
     3.  **Extract Fields from Columns:** For each product column you find:
-        - The **first data row** (the header row in the table) contains the "style_id".
+    
+        - The **first data row** (the header row in the table) contains the "style_id" or the "product name", store either under "style_id".
         - The **second data row** contains the "SKU".
         - The **third data row** contains the "Color".
         - If The "Price" field is present in the source data, extract that too, else you must set the value of "Price" to `None`
+        - Somtimes the order might be different so makes decisions according to the given data.
     4.  **Maintain Order:** Extract products from left to right within each table. Process the tables sequentially from top to bottom as they appear in the document.
     5.  **Format Output:** Return a single JSON array containing one dictionary for each extracted product. Do not include any explanatory text, markdown formatting, or anything other than the JSON object itself.
-
+    
     **Example Input Snippet:**
-
+    
     | NCC-895 S | NCC-896 S |
     | --------- | --------- |
     | NCC-895   | NCC-896   |
     | SILVER    | SILVER    |
-
+    
     **Correct Output for the Snippet Above:**
-
+    
     ```json
     [
       {{
@@ -125,6 +127,7 @@ def process_pdf_to_excel_with_images(
         "Color": "SILVER"
       }}
     ]
+
     """
 
     try:
