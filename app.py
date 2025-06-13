@@ -4,6 +4,7 @@ import os
 import io
 import base64
 from util import process_pdf_to_excel_with_images
+import shutil
 
 
 # Ensure necessary directories exist
