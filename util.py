@@ -86,48 +86,67 @@ def process_pdf_to_excel_with_images(
         product_data: List[Product]
 
     # --- 2. Extract Product Data from Markdown using OpenAI ---
-    user_prompt = f""""You are an expert data extraction assistant specializing in parsing structured text from markdown.
+    user_prompt = f""""You are a highly specialized data extraction AI. Your sole function is to parse product information from text formatted into markdown tables and return clean, valid JSON. You must follow the rules below precisely.
+    
+    User Prompt:
 
-    Your task is to analyze the following markdown string, which contains product information organized into multiple tables.
+    Analyze the following markdown string. The string contains multiple product tables. Your task is to extract the information for every product and format it as a single JSON array.
     
-    **Instructions:**
-    1.  **Identify Data Tables:** Scan the markdown to find all the product tables.
-    2.  **Understand the Structure:** In each table, **each column represents a single product**. The data for each product is arranged vertically down the column.
-    3.  **Extract Fields from Columns:** For each product column you find:
+    Extraction Rules:
     
-        - The **first data row** (the header row in the table) contains the "style_id" or the "product name", store either under "style_id".
-        - The **second data row** contains the "SKU".
-        - The **third data row** contains the "Color".
-        - If The "Price" field is present in the source data, extract that too, else you must set the value of "Price" to `None`
-        - Somtimes the order might be different so makes decisions according to the given data.
-    4.  **Maintain Order:** Extract products from left to right within each table. Process the tables sequentially from top to bottom as they appear in the document.
-    5.  **Format Output:** Return a single JSON array containing one dictionary for each extracted product. Do not include any explanatory text, markdown formatting, or anything other than the JSON object itself.
+    Data Structure: The fundamental structure is that each column represents a single product. All data for a product is listed vertically within its column.
     
-    **Example Input Snippet:**
+    Processing Order:
     
-    | NCC-895 S | NCC-896 S |
-    | --------- | --------- |
-    | NCC-895   | NCC-896   |
-    | SILVER    | SILVER    |
+    Process the tables in the order they appear, from top to bottom.
+    Within each table, process the product columns from left to right.
+    Field Identification and Mapping: For each product column, you must identify and extract the following fields based on these specific patterns:
     
-    **Correct Output for the Snippet Above:**
+    style_id: This is the primary identifier located in the header row of the table (the very first row). It can be a style code or a product name.
+    SKU: This is the secondary identifier, typically located in the first data row directly beneath the header.
+    Price: Scan the rows for a value ending in "USD". This is the price. If no price is present for a product, you must set the value to null in the final JSON.
+    Color: This is the descriptive color attribute (e.g., "GOLD/BLACK", "SILVER", "GUN/BLACK"). It is usually the last data row associated with the product.
+    Important: The order of SKU, Price, and Color rows is not fixed. You must use the content of the data itself (e.g., the "USD" suffix for price) to correctly identify which row corresponds to which field.
+    Output Format:
     
-    ```json
+    The entire output must be a single JSON array.
+    Each object in the array represents one product.
+    Do not include any explanatory text, comments, apologies, or markdown formatting like ```json ... ```. Your response must start with [ and end with ].
+    Example:
+    
+    Given this input snippet:
+    
+    Markdown
+    
+    | 10086A-6-SB | 10086A-5-SB | KDT101 |
+    | :--- | :--- | :--- |
+    | 10086A-SB | 10086A-SB | FNM-KDT101 |
+    | 12.00 USD | 12.00 USD |            |
+    | GOLD/BLACK | SILVER/BLACK| SILVER |
+    Your output must be exactly:
+    
+    JSON
+    
     [
-      {{
-        "style_id": "NCC-895 S",
-        "SKU": "NCC-895",
-        "Price": null,
+      \{
+        "style_id": "10086A-6-SB",
+        "SKU": "10086A-SB",
+        "Price": "12.00 USD",
+        "Color": "GOLD/BLACK"
+      },
+      \{
+        "style_id": "10086A-5-SB",
+        "SKU": "10086A-SB",
+        "Price": "12.00 USD",
+        "Color": "SILVER/BLACK"
+      },
+      \{
+        "style_id": "KDT101",
+        "SKU": "FNM-KDT101",
+        "Price": None,
         "Color": "SILVER"
-      }},
-      {{
-        "style_id": "NCC-896 S",
-        "SKU": "NCC-896",
-        "Price": null,
-        "Color": "SILVER"
-      }}
+      }
     ]
-
     """
 
     try:
