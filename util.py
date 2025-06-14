@@ -96,11 +96,12 @@ def process_pdf_to_excel_with_images(
     
     Field Identification: For each product column, you must identify and extract the following fields:
     
-    style_id: This is the primary identifier or product name located in the table's header row.
-    sku: This is the secondary identifier, usually found in the first data row directly under the header.
+    style_id: This is the primary identifier or product name located in the table's header row eg: "0128-401-SM" or "13mm Iced Cuban Bracelet"
+    sku: This is the secondary identifier, usually found in the first data row directly under the header. eg: "ASG10NM"
     price: This is the value that contains "USD".
     color: This is the descriptive color attribute (e.g., "GOLD/BLACK", "SILVER"), which is typically the last piece of information in the column.
-    Flexible Row Order: The rows for sku, price, and color may appear in any order. Use the content patterns described above to correctly map the data to the appropriate field. If information for an optional field (sku, price, or color) is not found,fill in Noney.
+    Flexible Row Order: The rows for sku, price, and color may or may not be present. Use the content patterns described above to correctly map the data to the appropriate field. 
+    IMPORTANT: If information for a field (sku, price, or color) is not found, fill in null.
 
     Example:
     
