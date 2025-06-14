@@ -86,7 +86,7 @@ def process_pdf_to_excel_with_images(
         product_data: List[Product]
 
     # --- 2. Extract Product Data from Markdown using OpenAI ---
-    user_prompt = f""""You are an expert AI assistant for data extraction. Your sole purpose is to analyze product information within markdown tables and accurately populate the fields of the DataExtractor schema based on the provided text.
+    user_prompt = """"You are an expert AI assistant for data extraction. Your sole purpose is to analyze product information within markdown tables and accurately populate the fields of the DataExtractor schema based on the provided text.
 
     Analyze the following markdown string. The string contains multiple product tables. Your task is to extract the information for every product and format it as a single JSON array.
     
@@ -122,25 +122,25 @@ def process_pdf_to_excel_with_images(
     JSON
     
     [
-      \{
+      {
         "style_id": "10086A-6-SB",
         "SKU": "10086A-SB",
         "Price": "12.00 USD",
         "Color": "GOLD/BLACK"
       },
-      \{
+      {
         "style_id": "10086A-5-SB",
         "SKU": "10086A-SB",
         "Price": "12.00 USD",
         "Color": "SILVER/BLACK"
       },
-      \{
+      {
         "style_id": "KDT101",
         "SKU": "FNM-KDT101",
         "Price": None,
         "Color": "SILVER"
       }
-      \{
+      {
         "style_id": "14mm Cuban Link Pant Chain",
         "SKU": "BKC-209",
         "Price": "5.50 USD",
