@@ -88,24 +88,20 @@ def process_pdf_to_excel_with_images(
     # --- 2. Extract Product Data from Markdown using OpenAI ---
     user_prompt = """"You are an expert AI assistant for data extraction. Your sole purpose is to analyze product information within markdown tables and accurately populate the fields of the DataExtractor schema based on the provided text.
 
-    Analyze the following markdown string. The string contains multiple product tables. Your task is to extract the information for every product and format it as a single JSON array.
+    Analyze the following markdown string. It contains one or more tables where each column represents a unique product.
+
+    Your task is to extract the details for every product by following these rules precisely:
     
-    Extraction Rules:
+    Processing Order: Process tables top-to-bottom and the product columns within them from left-to-right.
     
-    Data Structure: The fundamental structure is that each column represents a single product. All data for a product is listed vertically within its column.
+    Field Identification: For each product column, you must identify and extract the following fields:
     
-    Processing Order:
-    
-    Process the tables in the order they appear, from top to bottom.
-    Within each table, process the product columns from left to right.
-    Field Identification and Mapping: For each product column, you must identify and extract the following fields based on these specific patterns:
-    
-    style_id: This is the primary identifier located in the header row of the table (the very first row). It can be a style code or a product name.
-    SKU: This is the secondary identifier, typically located in the first data row directly beneath the header.
-    Price: Scan the rows for a value ending in "USD". This is the price. If no price is present for a product, you must set the value to null in the final JSON.
-    Color: This is the descriptive color attribute (e.g., "GOLD/BLACK", "SILVER", "GUN/BLACK"). It is usually the last data row associated with the product.
-    Important: The order of SKU, Price, and Color rows is not fixed. You must use the content of the data itself (e.g., the "USD" suffix for price) to correctly identify which row corresponds to which field.  If a piece of information for an optional field (sku, price, color) is not found, leave it empty
-    
+    style_id: This is the primary identifier or product name located in the table's header row.
+    sku: This is the secondary identifier, usually found in the first data row directly under the header.
+    price: This is the value that contains "USD".
+    color: This is the descriptive color attribute (e.g., "GOLD/BLACK", "SILVER"), which is typically the last piece of information in the column.
+    Flexible Row Order: The rows for sku, price, and color may appear in any order. Use the content patterns described above to correctly map the data to the appropriate field. If information for an optional field (sku, price, or color) is not found,fill in Noney.
+
     Example:
     
     Given this input snippet:
