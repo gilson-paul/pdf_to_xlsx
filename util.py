@@ -153,7 +153,7 @@ def process_pdf_to_excel_with_images(
         client = OpenAI(api_key=openai_api_key)
         print("Sending request to OpenAI API to extract data...")
         response = client.beta.chat.completions.parse(
-            model="gpt-4o",
+            model="gpt-4.1-mini",
             messages=[
                 {
                     "role": "system",
