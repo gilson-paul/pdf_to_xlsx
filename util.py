@@ -86,9 +86,7 @@ def process_pdf_to_excel_with_images(
         product_data: List[Product]
 
     # --- 2. Extract Product Data from Markdown using OpenAI ---
-    user_prompt = f""""You are a highly specialized data extraction AI. Your sole function is to parse product information from text formatted into markdown tables and return clean, valid JSON. You must follow the rules below precisely.
-    
-    User Prompt:
+    user_prompt = f""""You are an expert AI assistant for data extraction. Your sole purpose is to analyze product information within markdown tables and accurately populate the fields of the DataExtractor schema based on the provided text.
 
     Analyze the following markdown string. The string contains multiple product tables. Your task is to extract the information for every product and format it as a single JSON array.
     
@@ -106,23 +104,19 @@ def process_pdf_to_excel_with_images(
     SKU: This is the secondary identifier, typically located in the first data row directly beneath the header.
     Price: Scan the rows for a value ending in "USD". This is the price. If no price is present for a product, you must set the value to null in the final JSON.
     Color: This is the descriptive color attribute (e.g., "GOLD/BLACK", "SILVER", "GUN/BLACK"). It is usually the last data row associated with the product.
-    Important: The order of SKU, Price, and Color rows is not fixed. You must use the content of the data itself (e.g., the "USD" suffix for price) to correctly identify which row corresponds to which field.
-    Output Format:
+    Important: The order of SKU, Price, and Color rows is not fixed. You must use the content of the data itself (e.g., the "USD" suffix for price) to correctly identify which row corresponds to which field.  If a piece of information for an optional field (sku, price, color) is not found, leave it empty
     
-    The entire output must be a single JSON array.
-    Each object in the array represents one product.
-    Do not include any explanatory text, comments, apologies, or markdown formatting like ```json ... ```. Your response must start with [ and end with ].
     Example:
     
     Given this input snippet:
     
     Markdown
     
-    | 10086A-6-SB | 10086A-5-SB | KDT101 |
-    | :--- | :--- | :--- |
-    | 10086A-SB | 10086A-SB | FNM-KDT101 |
-    | 12.00 USD | 12.00 USD |            |
-    | GOLD/BLACK | SILVER/BLACK| SILVER |
+    | 10086A-6-SB | 10086A-5-SB |    KDT101   | 14mm Cuban Link Pant Chain |
+    | :---------- | :---------- | :---------- | :------------------------- |
+    |  10086A-SB  |  10086A-SB  |  FNM-KDT101 |         BKC-209            |
+    |  12.00 USD  |  12.00 USD  |             |         5.50 USD           |
+    |  GOLD/BLACK | SILVER/BLACK|    SILVER   |         GUN/BLACK          |
     Your output must be exactly:
     
     JSON
@@ -145,6 +139,12 @@ def process_pdf_to_excel_with_images(
         "SKU": "FNM-KDT101",
         "Price": None,
         "Color": "SILVER"
+      }
+      \{
+        "style_id": "14mm Cuban Link Pant Chain",
+        "SKU": "BKC-209",
+        "Price": "5.50 USD",
+        "Color": "GUN/BLACK"
       }
     ]
     """
