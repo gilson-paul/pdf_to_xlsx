@@ -17,8 +17,10 @@ def process_pdf_to_excel_with_images(
     pdf_path: str,
     output_folder: str,
     output_excel_file: str,
+    banners_list: list,
     llama_api_key: str,
     openai_api_key: str,
+    
 ):
     """
     Parses a PDF to extract product information and images, then combines them
