@@ -55,7 +55,7 @@ process_button = st.button("Process All PDFs")
 try:
     gemini_api_key = st.secrets["GEMINI_API_KEY"]
 except (KeyError, FileNotFoundError):
-    llama_api_key = None
+    gemini_api_key = None
     st.warning("GEMINI_API_KEY not found in secrets. Processing may fail.")
 
 try:
@@ -66,7 +66,7 @@ except (KeyError, FileNotFoundError):
 
 # --- Processing Logic ---
 if process_button and uploaded_files:
-    if llama_api_key is None or openai_api_key is None:
+    if gemini_api_key is None or openai_api_key is None:
         st.error("API keys are missing. Please configure your Streamlit secrets.")
     else:
         st.info("Starting batch processing...")
