@@ -266,9 +266,10 @@ def process_pdf_to_excel_with_images(
                 base64_str = base64.b64encode(img_bytes).decode("utf-8")
 
                 #AAAAAAAA change this later
-                if not is_single_product_image(base64_str):
-                    banners+=1
-                    continue
+                if contains_banners:
+                    if not is_single_product_image(base64_str):
+                        banners+=1
+                        continue
 
                 image_filename = f"page_{page_index + 1}-image_{image_index - white_images_skipped}.png"
                 pix.save(os.path.join(output_folder, image_filename))
