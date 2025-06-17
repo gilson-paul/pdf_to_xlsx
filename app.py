@@ -53,10 +53,10 @@ process_button = st.button("Process All PDFs")
 # --- API Key Handling ---
 # Use secrets for API keys in a deployed Streamlit app via st.secrets
 try:
-    llama_api_key = st.secrets["LLAMA_API_KEY"]
+    gemini_api_key = st.secrets["GEMINI_API_KEY"]
 except (KeyError, FileNotFoundError):
     llama_api_key = None
-    st.warning("LLAMA_API_KEY not found in secrets. Processing may fail.")
+    st.warning("GEMINI_API_KEY not found in secrets. Processing may fail.")
 
 try:
     openai_api_key = st.secrets["OPENAI_API_KEY"]
@@ -94,7 +94,8 @@ if process_button and uploaded_files:
                     pdf_path=temp_pdf_path,
                     output_folder=image_output_dir,
                     output_excel_file=final_excel_file,
-                    llama_api_key=llama_api_key,
+                    contains_banners = has_banners,
+                    gemini_api_key=gemini_api_key,
                     openai_api_key=openai_api_key,
                     # has_banners=has_banners  # Example of passing the flag
                 )
