@@ -11,6 +11,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 from xlsxwriter.utility import xl_rowcol_to_cell
 import google.generativeai as genai
+import json
 
 
 def process_pdf_to_excel_with_images(
