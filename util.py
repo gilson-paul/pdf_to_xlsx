@@ -10,7 +10,7 @@ import pymupdf  # PyMuPDF
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from xlsxwriter.utility import xl_rowcol_to_cell
-from llama_cloud_services import LlamaParse
+import google.generativeai as genai
 
 
 def process_pdf_to_excel_with_images(
@@ -18,7 +18,7 @@ def process_pdf_to_excel_with_images(
     output_folder: str,
     output_excel_file: str,
     contains_banners: bool,
-    llama_api_key: str,
+    gemini_api_key: str,
     openai_api_key: str,
     
 ):
@@ -27,8 +27,7 @@ def process_pdf_to_excel_with_images(
     into a single Excel file with embedded images.
 
     This function performs the following steps:
-    1.  Parses the PDF content into markdown using LlamaParse.
-    2.  Extracts structured product data from the markdown using OpenAI's GPT model.
+    1.  Extracts structured product data from the pdf using Gemnini.
     3.  Extracts all images from the PDF using PyMuPDF.
     4.  Creates a pandas DataFrame from the extracted product data.
     5.  Saves the DataFrame to an Excel file.
@@ -42,169 +41,111 @@ def process_pdf_to_excel_with_images(
         openai_api_key (str): Your OpenAI API key.
     """
 
-    # --- 1. Parse PDF to Markdown using LlamaParse ---
+    # Configure with your API key
+    genai.configure(api_key=gemini_api_key)
+
+    # 1. Upload the file to the Files API
+    # This could be an image, PDF, audio, or video file.
+    #print("Uploading file...")
+    sample_file = genai.upload_file(path=pdf_path, display_name="test_pdf")
+    #print(f"Uploaded file '{sample_file.display_name}' as: {sample_file.uri}")
+
+    # 2. Use the file in a prompt
+    # The 'gemini-1.5-flash' model is a fast, multimodal model.
+    model = genai.GenerativeModel(model_name="gemini-2.5-flash-preview-05-20")
+
+    # The prompt is a list containing both the file object and the text query.
+    prompt = [
+        """Given pdf is a products catalogue, you have to extract the relevant information from it and generate a JSON object according to the following requirements:
+        **Instructions:**
+        1.  Scan the pdf to find all the product details. Don't extract text from the product image, only use the text under the image.
+        2.  In each table, each column represents a single product, the data for each product is arranged vertically down the column.
+        3.  Extract Fields from Columns: For each product column you find:
+            - The first row contains the "style_id" which can be an alphanumeric code or the name of the product
+            - The second row contains the "SKU" which is an alphanumeric code
+            - The third row contains the "Color" which can be the name of a color or a number
+            - The "Price" field (in USD) if present in the source data, extract that too, else you must set the value of "Price" to `None`
+        4. Sometimes the values for SKU, Color or Price may change order, so extract them accordingly.
+        4.  **Maintain Order:** Extract products from left to right within each table. Process the tables sequentially from top to bottom as they appear in the document.
+        
+        **Example Input Snippet:**
+
+        | NCC-895 S | NCC-896 S | NCC-896 S | ASG10MN | 13mm Iced Cuban Bracelet |
+        | NCC-895   | NCC-896   | NCC-896   | ASG10MN |      DD-IOCH-206-B       |
+        | SILVER    | SILVER    | SILVER    |   104   |         4.00 USD         |
+        |           |           |           |         |          SILVER          |
+
+        **Correct Output for the Snippet Above:**
+
+        {{
+            "style_id": "NCC-895 S",
+            "SKU": "NCC-895",
+            "Price": null,
+            "Color": "SILVER"
+          },
+          {
+            "style_id": "NCC-896 S",
+            "SKU": "NCC-896",
+            "Price": null,
+            "Color": "SILVER"
+          },
+          {
+            "style_id": "ASG10MN",
+            "SKU": "ASG10MN",
+            "Price": null,
+            "Color": "104"
+          },
+          {
+            "style_id": "13mm Iced Cuban Bracelet",
+            "SKU": "DD-IOCH-206-B",
+            "Price": "4.00 USD",
+            "Color": "SILVER"
+          }}
+        
+        """,
+        sample_file]
+
+    response_stream = model.generate_content(prompt,
+                                      generation_config=genai.types.GenerationConfig(
+            response_mime_type="application/json"
+            ),
+            stream=True)
+
+    # Accumulate the streamed response
+    response = ""
+    for chunk in response_stream:
+        response += chunk.text
+    
+    # The response text will be a JSON string, so you need to parse it
     try:
-        parser = LlamaParse(api_key=llama_api_key)
-        print(f"Parsing PDF: {pdf_path} with LlamaParse...")
-        result = parser.parse(pdf_path)
-
-        if not result or not result.pages:
-            print("LlamaParse returned no pages or an empty result.")
-            return
-
-        all_markdown = "".join(
-            page.md + "\n\n" for page in result.pages if page.md
-        ).strip()
-        print("PDF parsing complete.")
-
-    except FileNotFoundError:
-        print(f"Error: The file at {pdf_path} was not found.")
-        return
-    except Exception as e:
-        print(f"An error occurred during LlamaParse: {e}")
-        return
-
-    # --- Pydantic Models for Structured Data Extraction ---
-    class Product(BaseModel):
-        """Represents a single product with its details."""
-
-        style_id: str = Field(
-            ...,
-            description="The style identifier of the product, e.g., 'NCC-895 S'. Always present.",
-        )
-        sku: Optional[str] = Field(
-            None, alias="SKU", description="The SKU of the product, e.g., 'NCC-895'."
-        )
-        price: Optional[str] = Field(
-            None, description="The price of the product, if available."
-        )
-        color: Optional[str] = Field(
-            None, description="The color of the product, if available."
-        )
-
-    class DataExtractor(BaseModel):
-        """A container for the list of extracted product data."""
-
-        product_data: List[Product]
-
-    # --- 2. Extract Product Data from Markdown using OpenAI ---
-    user_prompt = """"You are an expert AI assistant for data extraction. Your sole purpose is to analyze product information within markdown tables and accurately populate the fields of the DataExtractor schema based on the provided text.
-
-    Analyze the following markdown string. It contains one or more tables where each column represents a unique product.
-
-    Your task is to extract the details for every product by following these rules precisely:
-    
-    Processing Order: Process tables top-to-bottom and the product columns within them from left-to-right.
-    
-    Field Identification: For each product column, you must identify and extract the following fields:
-    
-    style_id: This is the primary identifier or product name located in the table's header row eg: "0128-401-SM" or "13mm Iced Cuban Bracelet"
-    sku: This is the secondary identifier, usually found in the first data row directly under the header. eg: "ASG10NM"
-    price: This is the value that contains "USD".
-    color: This is the descriptive color attribute (e.g., "GOLD/BLACK", "SILVER"), which is typically the last piece of information in the column.
-    Flexible Row Order: The rows for sku, price, and color may or may not be present. Use the content patterns described above to correctly map the data to the appropriate field. 
-    IMPORTANT: If information for a field (sku, price, or color) is not found, fill in null.
-
-    Example:
-    
-    Given this input snippet:
-    
-    Markdown
-    
-    | 10086A-6-SB | 10086A-5-SB |    KDT101   | 14mm Cuban Link Pant Chain |
-    | :---------- | :---------- | :---------- | :------------------------- |
-    |  10086A-SB  |  10086A-SB  |  FNM-KDT101 |         BKC-209            |
-    |  12.00 USD  |  12.00 USD  |             |         5.50 USD           |
-    |  GOLD/BLACK | SILVER/BLACK|    SILVER   |         GUN/BLACK          |
-    Your output must be exactly:
-    
-    JSON
-    
-    [
-      {
-        "style_id": "10086A-6-SB",
-        "SKU": "10086A-SB",
-        "Price": "12.00 USD",
-        "Color": "GOLD/BLACK"
-      },
-      {
-        "style_id": "10086A-5-SB",
-        "SKU": "10086A-SB",
-        "Price": "12.00 USD",
-        "Color": "SILVER/BLACK"
-      },
-      {
-        "style_id": "KDT101",
-        "SKU": "FNM-KDT101",
-        "Price": None,
-        "Color": "SILVER"
-      }
-      {
-        "style_id": "14mm Cuban Link Pant Chain",
-        "SKU": "BKC-209",
-        "Price": "5.50 USD",
-        "Color": "GUN/BLACK"
-      }
-    ]
-    """
-
-    try:
-        client = OpenAI(api_key=openai_api_key)
-        print("Sending request to OpenAI API to extract data...")
-        response = client.beta.chat.completions.parse(
-            model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": [{"type": "text", "text": user_prompt}],
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"Mardown text:\n{all_markdown}",
-                        }
-                    ],
-                },
-            ],
-            response_format=DataExtractor,
-        )
-
-        data: DataExtractor = response.choices[0].message.parsed
-        print("Data extraction successful.")
-
-        product_list = [
-            product.model_dump(by_alias=True) for product in data.product_data
-        ]
-
-        if not product_list:
-            print("Warning: No products were extracted from the PDF.")
-            product_df = pd.DataFrame(
-                columns=["Image", "Style ID", "SKU", "Price", "Color"]
-            )
-        else:
-            product_df = pd.DataFrame(product_list)
-            # Add the 'product_image' column at the beginning
-            product_df.insert(0, "Image", None)
-            # Ensure column order and naming matches the requirement
-            product_df = product_df.rename(
-                columns={
-                    "style_id": "Style ID",
-                    "sku": "SKU",
-                    "price": "Price",
-                    "color": "Color",
-                }
-            )
-            final_columns = ["Image", "Style ID", "SKU", "Price", "Color"]
-            product_df = product_df.reindex(columns=final_columns)
+        json_response = json.loads(response)
+        #print(json.dumps(json_response, indent=4))
+    except json.JSONDecodeError:
+        print("Error: The response was not valid JSON.")
+        print(response)
+        #print(response.text)
 
 
-    except Exception as e:
-        print(f"An unexpected error occurred during OpenAI data extraction: {e}")
+    if not json_response:
+        print("Warning: No products were extracted from the PDF.")
         product_df = pd.DataFrame(
             columns=["Image", "Style ID", "SKU", "Price", "Color"]
         )
+    else:
+        product_df = pd.DataFrame(json_response)
+        # Add the 'product_image' column at the beginning
+        product_df.insert(0, "Image", None)
+        # Ensure column order and naming matches the requirement
+        product_df = product_df.rename(
+            columns={
+                "style_id": "Style ID",
+                "sku": "SKU",
+                "price": "Price",
+                "color": "Color",
+            }
+        )
+        final_columns = ["Image", "Style ID", "SKU", "Price", "Color"]
+        product_df = product_df.reindex(columns=final_columns)
 
     # --- 3. Extract Images from PDF ---
     def is_single_product_image(image_str: str, api_key: str=openai_api_key) -> bool:
@@ -293,10 +234,12 @@ def process_pdf_to_excel_with_images(
 
     try:
         doc = pymupdf.open(pdf_path)
+        banners = 0
+        white_images_skipped = 0
         for page_index in range(len(doc)):
             page = doc[page_index]
             image_list = page.get_images(full=True)
-            white_images_skipped = 0
+            
 
             for image_index, img_info in enumerate(image_list, start=1):
                 xref = img_info[0]
@@ -304,37 +247,41 @@ def process_pdf_to_excel_with_images(
 
                 if pix.n - pix.alpha > 3:  # CMYK -> RGB
                     pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
-                
+
                 pil_image = pix.pil_image()
                 # Skip pure white images
                 if (np.array(pil_image) == 255).all():
                     white_images_skipped += 1
                     continue
-                
+
                 buffered = io.BytesIO()
-    
+
                 # Save the PIL image to the buffer in the specified format
                 pil_image.save(buffered, format="PNG")
-                
+
                 # Get the bytes from the buffer
                 img_bytes = buffered.getvalue()
-                
+
                 # Encode the bytes to base64 and decode to a utf-8 string
                 base64_str = base64.b64encode(img_bytes).decode("utf-8")
 
-                if contains_banners:
-                    if not is_single_product_image(base64_str):
-                        continue
+                #AAAAAAAA change this later
+                if not is_single_product_image(base64_str):
+                    banners+=1
+                    continue
 
                 image_filename = f"page_{page_index + 1}-image_{image_index - white_images_skipped}.png"
                 pix.save(os.path.join(output_folder, image_filename))
-            
+
             #if image_list:
             #    found_count = len(image_list) - white_images_skipped
             #    print(f"Found {found_count} non-white images on page {page_index + 1}")
             #else:
             #    print(f"No images found on page {page_index + 1}")
-
+        if image_list:
+            found_count = len(image_list) - white_images_skipped
+            print(f"Found {white_images_skipped} white images in pdf",
+                  f"Found {banners} banners")
         print("All PDF pages processed for images.")
         doc.close()
 
@@ -342,6 +289,7 @@ def process_pdf_to_excel_with_images(
         print(f"An error occurred during image extraction: {e}")
 
 
+    # --- 4. Sort Images and Write to Excel ---
     # --- 4. Sort Images and Write to Excel ---
     image_files = glob.glob(os.path.join(output_folder, "*.png"))
     # Sort images by page number, then by image number
@@ -373,10 +321,10 @@ def process_pdf_to_excel_with_images(
                         f"Stopping image insertion."
                     )
                     break
-                
+
                 # Set the specific row's height
                 worksheet.set_row(excel_row, default_row_height)
-                
+
                 # Insert the image, centered in the cell
                 worksheet.embed_image(excel_row, 0, image_path, {'object_position': 1})
 
