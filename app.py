@@ -5,6 +5,7 @@ import io
 import base64
 from util import process_pdf_to_excel_with_images  # Assuming this is in a util.py file
 import shutil
+import json
 
 # --- Directory Setup ---
 # Ensure necessary directories exist at the start
